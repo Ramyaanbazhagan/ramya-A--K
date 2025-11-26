@@ -48,7 +48,7 @@ model, embeddings = load_embeddings()
 # GEMINI API KEY INPUT
 # ================================
 st.sidebar.header("Gemini API Settings")
-api_key = st.sidebar.text_input("Enter your Gemini API Key:", type="password")
+api_key = st.sidebar.text_input("AIzaSyB-zTFs4BYaYME6ilDOsBidPtB_WHfcOsA:", type="password")
 
 if api_key:
     genai.configure(api_key=api_key)
