@@ -5,7 +5,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer, util
 
 # ================================
-# STEP 1: LOAD JSON MEMORY
+# LOAD JSON MEMORY
 # ================================
 @st.cache_resource
 def load_memory():
@@ -15,7 +15,7 @@ def load_memory():
 memory_data = load_memory()
 
 # ================================
-# STEP 2: FLATTEN JSON
+# FLATTEN JSON FOR EMBEDDING
 # ================================
 def flatten_json(data, parent_key=""):
     items = []
@@ -34,7 +34,7 @@ memory_pairs = flatten_json(memory_data)
 memory_texts = [v for _, v in memory_pairs]
 
 # ================================
-# STEP 3: BUILD EMBEDDINGS
+# BUILD EMBEDDINGS
 # ================================
 @st.cache_resource
 def load_embeddings():
@@ -45,16 +45,16 @@ def load_embeddings():
 model, embeddings = load_embeddings()
 
 # ================================
-# STEP 4: GEMINI API KEY
+# GEMINI API KEY INPUT
 # ================================
-st.sidebar.header("API Settings")
-api_key = st.sidebar.text_input("AIzaSyB-zTFs4BYaYME6ilDOsBidPtB_WHfcOsA:", type="password")
+st.sidebar.header("Gemini API Settings")
+api_key = st.sidebar.text_input("Enter your Gemini API Key:", type="password")
 
 if api_key:
     genai.configure(api_key=api_key)
 
 # ================================
-# STEP 5: SMART RETRIEVAL
+# KEYWORD MAP
 # ================================
 keyword_map = {
     "favorite food": "favorite_foods",
@@ -79,15 +79,20 @@ keyword_map = {
     "dislike": "dislikes"
 }
 
+# ================================
+# SMART CONTEXT RETRIEVAL
+# ================================
 def retrieve_context(query, top_k=3):
     q = query.lower()
 
+    # keyword-based match
     for key_word, json_key in keyword_map.items():
         if key_word in q:
             matched_items = [v for k, v in memory_pairs if json_key.lower() in k.lower()]
             if matched_items:
                 return matched_items
 
+    # semantic search fallback
     query_emb = model.encode(query, convert_to_tensor=True)
     scores = util.pytorch_cos_sim(query_emb, embeddings)[0]
     top_idx = np.argsort(-scores.cpu().numpy())[:top_k]
@@ -95,32 +100,33 @@ def retrieve_context(query, top_k=3):
     return [memory_texts[i] for i in top_idx]
 
 # ================================
-# STEP 6: CHAT UI
+# STREAMLIT UI
 # ================================
-st.title("🧠 Jabez Memory Chatbot")
+st.title("🧠 Jabez — Memory Enhanced AI Companion")
 
-user_msg = st.text_input("Ask something:")
+user_msg = st.text_input("Ask something to Jabez:")
 
 if st.button("Send"):
     if not api_key:
-        st.error("⚠ Please enter your Gemini API key in the left sidebar.")
+        st.error("⚠ Please enter your Gemini API key in the sidebar!")
     else:
         context = retrieve_context(user_msg)
         full_context = "\n".join(context) if context else "[No memory found]"
 
         prompt = f"""
-        You are Jabez, a friendly emotional companion of Ramya.
-        Use the memory context below if available.
-        Speak naturally, warmly, and personally.
+You are Jabez, a friendly emotional companion of Ramya.
+Use the memory context below if available.
+Respond warmly and naturally.
 
-        Memory Context:
-        {full_context}
+Memory Context:
+{full_context}
 
-        User Question: {user_msg}
-        """
+User Question: {user_msg}
+"""
 
         try:
             response = genai.GenerativeModel("models/gemini-2.5-flash").generate_content(prompt)
             st.success(response.text.strip())
         except Exception as e:
-            st.error(str(e))
+            st.error(f"Error: {e}")
+
