@@ -3,3 +3,4 @@ google-generativeai
 sentence-transformers
 torch
 numpy
+protobuf==3.20.3
