@@ -1,21 +1,21 @@
-# ================================
-# STEP 1: INSTALL & IMPORT
-# ================================
-!pip install google-generativeai sentence-transformers
-
+import streamlit as st
 import google.generativeai as genai
-import json, numpy as np
+import json
+import numpy as np
 from sentence_transformers import SentenceTransformer, util
 
 # ================================
-# STEP 2: LOAD JSON MEMORY
+# STEP 1: LOAD JSON MEMORY
 # ================================
-path = "/content/dataset.json"
-with open(path, "r") as f:
-    memory_data = json.load(f)
+@st.cache_resource
+def load_memory():
+    with open("dataset.json", "r") as f:
+        return json.load(f)
+
+memory_data = load_memory()
 
 # ================================
-# STEP 3: FLATTEN JSON FOR RETRIEVAL
+# STEP 2: FLATTEN JSON
 # ================================
 def flatten_json(data, parent_key=""):
     items = []
@@ -34,19 +34,27 @@ memory_pairs = flatten_json(memory_data)
 memory_texts = [v for _, v in memory_pairs]
 
 # ================================
-# STEP 4: BUILD SEMANTIC EMBEDDINGS
+# STEP 3: BUILD EMBEDDINGS
 # ================================
-model = SentenceTransformer("all-MiniLM-L6-v2")
-embeddings = model.encode(memory_texts, convert_to_tensor=True)
+@st.cache_resource
+def load_embeddings():
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    embeddings = model.encode(memory_texts, convert_to_tensor=True)
+    return model, embeddings
+
+model, embeddings = load_embeddings()
 
 # ================================
-# STEP 5: CONFIGURE GEMINI API
+# STEP 4: GEMINI API KEY
 # ================================
-genai.configure(api_key="AIzaSyB-zTFs4BYaYME6ilDOsBidPtB_WHfcOsA")  # Replace with your key
+st.sidebar.header("API Settings")
+api_key = st.sidebar.text_input("AIzaSyB-zTFs4BYaYME6ilDOsBidPtB_WHfcOsA:", type="password")
+
+if api_key:
+    genai.configure(api_key=api_key)
 
 # ================================
-# STEP 6: SMART RETRIEVAL
-# (keyword + semantic search)
+# STEP 5: SMART RETRIEVAL
 # ================================
 keyword_map = {
     "favorite food": "favorite_foods",
@@ -74,14 +82,12 @@ keyword_map = {
 def retrieve_context(query, top_k=3):
     q = query.lower()
 
-    # ----- KEYWORD → JSON KEY MATCHING -----
     for key_word, json_key in keyword_map.items():
         if key_word in q:
             matched_items = [v for k, v in memory_pairs if json_key.lower() in k.lower()]
             if matched_items:
                 return matched_items
 
-    # ----- SEMANTIC RETRIEVAL (fallback) -----
     query_emb = model.encode(query, convert_to_tensor=True)
     scores = util.pytorch_cos_sim(query_emb, embeddings)[0]
     top_idx = np.argsort(-scores.cpu().numpy())[:top_k]
@@ -89,45 +95,32 @@ def retrieve_context(query, top_k=3):
     return [memory_texts[i] for i in top_idx]
 
 # ================================
-# STEP 7: CHAT FUNCTION
+# STEP 6: CHAT UI
 # ================================
-def ask_jabez(user_input):
-    context = retrieve_context(user_input)
+st.title("🧠 Jabez Memory Chatbot")
 
-    # If context is empty → unseen/new question
-    if context:
-        full_context = "\n".join(context)
+user_msg = st.text_input("Ask something:")
+
+if st.button("Send"):
+    if not api_key:
+        st.error("⚠ Please enter your Gemini API key in the left sidebar.")
     else:
-        full_context = "[No prior memory, answer freely based on your knowledge]"
+        context = retrieve_context(user_msg)
+        full_context = "\n".join(context) if context else "[No memory found]"
 
-    prompt = f"""
-You are Jabez, a friendly emotional companion of Ramya.
-Use the memory context below if available.
-Speak naturally, warmly, and personally.
+        prompt = f"""
+        You are Jabez, a friendly emotional companion of Ramya.
+        Use the memory context below if available.
+        Speak naturally, warmly, and personally.
 
-Memory Context:
-{full_context}
+        Memory Context:
+        {full_context}
 
-User Question: {user_input}
-"""
+        User Question: {user_msg}
+        """
 
-    try:
-        response = genai.GenerativeModel("models/gemini-2.5-flash").generate_content(prompt)
-        return response.text.strip()
-    except Exception as e:
-        return f"[Error] {e}"
-
-# ================================
-# STEP 8: CHAT LOOP
-# ================================
-print("🗣️ Jabez (Emotion + Memory) is ready! Type 'exit' to quit.\n")
-
-while True:
-    user_input = input("You: ")
-
-    if user_input.lower() == "exit":
-        print("Jabez: Bye Ramya ❤️")
-        break
-
-    answer = ask_jabez(user_input)
-    print("Jabez:", answer, "\n")
+        try:
+            response = genai.GenerativeModel("models/gemini-2.5-flash").generate_content(prompt)
+            st.success(response.text.strip())
+        except Exception as e:
+            st.error(str(e))
