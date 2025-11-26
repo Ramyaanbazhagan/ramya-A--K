@@ -5,6 +5,12 @@ import numpy as np
 from sentence_transformers import SentenceTransformer, util
 
 # ================================
+# CONFIGURE GEMINI API KEY (HARDCODED)
+# ================================
+API_KEY = "AIzaSyB-zTFs4BYaYME6ilDOsBidPtB_WHfcOsA"
+genai.configure(api_key=API_KEY)
+
+# ================================
 # LOAD JSON MEMORY
 # ================================
 @st.cache_resource
@@ -45,15 +51,6 @@ def load_embeddings():
 model, embeddings = load_embeddings()
 
 # ================================
-# GEMINI API KEY INPUT
-# ================================
-st.sidebar.header("Gemini API Settings")
-api_key = st.sidebar.text_input("AIzaSyB-zTFs4BYaYME6ilDOsBidPtB_WHfcOsA:", type="password")
-
-if api_key:
-    genai.configure(api_key=api_key)
-
-# ================================
 # KEYWORD MAP
 # ================================
 keyword_map = {
@@ -85,14 +82,16 @@ keyword_map = {
 def retrieve_context(query, top_k=3):
     q = query.lower()
 
-    # keyword-based match
+    # Keyword retrieval
     for key_word, json_key in keyword_map.items():
         if key_word in q:
-            matched_items = [v for k, v in memory_pairs if json_key.lower() in k.lower()]
+            matched_items = [
+                v for k, v in memory_pairs if json_key.lower() in k.lower()
+            ]
             if matched_items:
                 return matched_items
 
-    # semantic search fallback
+    # Semantic fallback
     query_emb = model.encode(query, convert_to_tensor=True)
     scores = util.pytorch_cos_sim(query_emb, embeddings)[0]
     top_idx = np.argsort(-scores.cpu().numpy())[:top_k]
@@ -107,13 +106,10 @@ st.title("🧠 Jabez — Memory Enhanced AI Companion")
 user_msg = st.text_input("Ask something to Jabez:")
 
 if st.button("Send"):
-    if not api_key:
-        st.error("⚠ Please enter your Gemini API key in the sidebar!")
-    else:
-        context = retrieve_context(user_msg)
-        full_context = "\n".join(context) if context else "[No memory found]"
+    context = retrieve_context(user_msg)
+    full_context = "\n".join(context) if context else "[No memory found]"
 
-        prompt = f"""
+    prompt = f"""
 You are Jabez, a friendly emotional companion of Ramya.
 Use the memory context below if available.
 Respond warmly and naturally.
@@ -124,9 +120,9 @@ Memory Context:
 User Question: {user_msg}
 """
 
-        try:
-            response = genai.GenerativeModel("models/gemini-2.5-flash").generate_content(prompt)
-            st.success(response.text.strip())
-        except Exception as e:
-            st.error(f"Error: {e}")
+    try:
+        response = genai.GenerativeModel("models/gemini-2.5-flash").generate_content(prompt)
+        st.success(response.text.strip())
+    except Exception as e:
+        st.error(f"Error: {e}")
 
