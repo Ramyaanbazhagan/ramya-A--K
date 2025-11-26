@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer, util
 # ================================
 # CONFIGURE GEMINI API KEY (HARDCODED)
 # ================================
-API_KEY = "AIzaSyB-zTFs4BYaYME6ilDOsBidPtB_WHfcOsA"
+API_KEY = "AIzaSyDhdxNbcDDmoO2UDLwO_R4mJC8L6LnkO3s"
 genai.configure(api_key=API_KEY)
 
 # ================================
@@ -125,4 +125,3 @@ User Question: {user_msg}
         st.success(response.text.strip())
     except Exception as e:
         st.error(f"Error: {e}")
-
